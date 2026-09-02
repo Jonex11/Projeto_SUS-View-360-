@@ -1,0 +1,1311 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Painel Leitos SUS</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.5.1/chart.umd.min.js"></script>
+<style>
+:root {
+  --bg:#F5F7F8; --surface:#FFFFFF; --ink:#10202C; --ink-soft:#55666F; --ink-faint:#9AA7AE;
+  --line:#DFE6E9; --header-bg:#0B1B26;
+  --ok:#0B7285; --ok-dark:#075964; --ok-soft:#E1F2F3;
+  --warn:#B5730A; --warn-dark:#7A4A00; --warn-soft:#FBF0DD;
+  --alert:#B4302A; --alert-dark:#7A211D; --alert-soft:#FBE7E5;
+}
+* { box-sizing: border-box; }
+html,body { margin:0; padding:0; }
+body {
+  background:var(--bg); color:var(--ink);
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;
+  font-size:14px; line-height:1.45;
+}
+.mono { font-family: ui-monospace,"SF Mono","IBM Plex Mono","Roboto Mono",Menlo,Consolas,monospace; }
+.wrap { max-width:1180px; margin:0 auto; padding:0 20px; }
+a { color:inherit; }
+button, select, input { font: inherit; color: inherit; }
+button { cursor:pointer; }
+
+/* ---------- header ---------- */
+header.app-header { position:relative; overflow:hidden; background:var(--header-bg); }
+header.app-header svg.pulse-bg { position:absolute; inset:0; width:100%; height:100%; opacity:.16; }
+.pulse-path { stroke-dasharray:6 5; animation:pulseDash 3.6s linear infinite; }
+@keyframes pulseDash { to { stroke-dashoffset:-120; } }
+@media (prefers-reduced-motion: reduce) { .pulse-path { animation:none; } }
+.header-inner { position:relative; padding:20px; display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:16px; }
+.brand-eyebrow { display:flex; align-items:center; gap:8px; color:#7FA9B0; font-size:11px; text-transform:uppercase; letter-spacing:.15em; }
+.brand-title { color:#fff; font-size:22px; font-weight:600; margin:4px 0 2px; }
+.brand-sub { color:#8FA6AE; font-size:13px; }
+.comp-picker { display:flex; align-items:center; gap:8px; }
+.comp-picker span { color:#8FA6AE; font-size:12px; }
+select#comp-select {
+  background:#132C39; color:#EAF4F5; border:0; border-radius:6px; padding:7px 30px 7px 12px;
+  font-weight:600; appearance:none;
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%238FA6AE' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'/></svg>");
+  background-repeat:no-repeat; background-position:right 10px center;
+}
+
+/* ---------- tabs ---------- */
+nav.tabs { position:sticky; top:0; z-index:10; background:var(--surface); border-bottom:1px solid var(--line); }
+.tabs-inner { display:flex; gap:2px; overflow-x:auto; }
+.tab-btn {
+  background:none; border:0; white-space:nowrap; padding:13px 15px; font-size:14px; font-weight:500;
+  color:var(--ink-soft); position:relative; border-bottom:2px solid transparent;
+}
+.tab-btn.active { color:var(--ok-dark); border-bottom-color:var(--ok); }
+.tab-btn:focus-visible { outline:2px solid var(--ok); outline-offset:-2px; }
+
+/* ---------- filter bar ---------- */
+#filter-bar { border-bottom:1px solid var(--line); background:#FBFCFC; }
+#filter-bar .wrap { padding:9px 20px; display:flex; flex-wrap:wrap; align-items:center; gap:8px; }
+.select-box { position:relative; }
+.select-box select {
+  appearance:none; background:var(--surface); border:1px solid var(--line); border-radius:6px;
+  padding:6px 28px 6px 10px; font-size:13px; min-width:140px;
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%239AA7AE' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'/></svg>");
+  background-repeat:no-repeat; background-position:right 8px center;
+}
+.select-box select:focus-visible { outline:2px solid var(--ok); outline-offset:1px; }
+#clear-filters-btn { display:none; align-items:center; gap:4px; background:none; border:0; font-size:12px; font-weight:500; color:var(--ink-soft); padding:6px 8px; }
+
+/* ---------- layout / cards ---------- */
+main#content { padding:22px 20px 40px; }
+.stack { display:flex; flex-direction:column; gap:22px; }
+.grid { display:grid; gap:22px; }
+.grid-2 { grid-template-columns:1fr; }
+.grid-3 { grid-template-columns:1fr; }
+@media (min-width:900px) { .grid-2 { grid-template-columns:1fr 1fr; } .grid-3 { grid-template-columns:1fr 1fr 1fr; } }
+.card { background:var(--surface); border:1px solid var(--line); border-radius:10px; padding:16px; }
+.eyebrow { font-size:11px; text-transform:uppercase; letter-spacing:.08em; font-weight:600; color:var(--ok-dark); }
+.section-title { font-size:15px; font-weight:600; margin:2px 0 0; }
+.section-note { font-size:12px; color:var(--ink-soft); margin:4px 0 0; }
+.section-head { margin-bottom:12px; }
+
+/* ---------- kpi ---------- */
+.kpi-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:12px; }
+@media (min-width:700px) { .kpi-grid { grid-template-columns:repeat(3,1fr); } }
+@media (min-width:1000px) { .kpi-grid { grid-template-columns:repeat(5,1fr); } }
+.kpi-card { background:var(--surface); border:1px solid var(--line); border-radius:10px; padding:14px; display:flex; flex-direction:column; gap:10px; min-width:0; }
+.kpi-top { display:flex; align-items:center; justify-content:space-between; color:var(--ink-faint); }
+.kpi-label { font-size:11px; text-transform:uppercase; letter-spacing:.06em; font-weight:600; color:var(--ink-soft); }
+.kpi-mid { display:flex; align-items:flex-end; justify-content:space-between; gap:8px; }
+.kpi-value { font-size:22px; font-weight:600; line-height:1; }
+.kpi-sub { font-size:12px; color:var(--ink-soft); margin-top:6px; }
+.kpi-badge { font-size:12px; font-weight:600; border-radius:5px; padding:4px 8px; align-self:flex-start; }
+.spark { flex-shrink:0; overflow:visible; }
+
+/* ---------- mom ---------- */
+.mom-card { display:flex; flex-wrap:wrap; gap:22px; align-items:center; }
+.mom-label { font-size:11px; text-transform:uppercase; letter-spacing:.08em; font-weight:600; color:var(--ink-soft); }
+.mom-item { display:flex; align-items:center; gap:8px; }
+.mom-delta { font-size:13px; font-weight:600; display:flex; align-items:center; gap:2px; }
+
+/* ---------- badges ---------- */
+.badge { font-size:12px; font-weight:600; border-radius:5px; padding:2px 6px; white-space:nowrap; }
+
+/* ---------- charts ---------- */
+.chart-wrap { position:relative; width:100%; }
+
+/* ---------- tables ---------- */
+.table-scroll { overflow-x:auto; }
+table { width:100%; border-collapse:collapse; font-size:13.5px; }
+thead th { text-align:left; font-size:11px; text-transform:uppercase; letter-spacing:.04em; font-weight:600; color:var(--ink-soft); padding-bottom:8px; white-space:nowrap; }
+thead th button { background:none; border:0; display:flex; align-items:center; gap:4px; font:inherit; font-weight:inherit; color:inherit; text-transform:inherit; letter-spacing:inherit; padding:0; }
+tbody td { padding:7px 6px 7px 0; border-top:1px solid var(--line); vertical-align:middle; }
+tbody tr:hover { background:var(--bg); }
+tbody tr.clickable { cursor:pointer; }
+.truncate { max-width:260px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.muted { color:var(--ink-soft); }
+.mini-icon { color:var(--ink-faint); vertical-align:middle; margin-right:4px; }
+
+/* ---------- profile bars (módulo 3) ---------- */
+.profile-row + .profile-row { margin-top:14px; }
+.profile-top { display:flex; align-items:center; justify-content:space-between; font-size:13.5px; margin-bottom:5px; }
+.profile-track { height:8px; border-radius:5px; background:#EEF1F2; overflow:hidden; }
+.profile-fill { height:100%; border-radius:5px; }
+.profile-bottom { display:flex; align-items:center; justify-content:space-between; font-size:12px; color:var(--ink-soft); margin-top:5px; }
+
+/* ---------- ranking / módulo 6 ---------- */
+.notice { font-size:12.5px; border-radius:6px; padding:9px 12px; display:flex; gap:8px; align-items:flex-start; background:var(--warn-soft); color:var(--warn-dark); }
+.filter-row { display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin-top:12px; }
+.search-box { position:relative; flex:1; min-width:220px; }
+.search-box svg { position:absolute; left:9px; top:50%; transform:translateY(-50%); color:var(--ink-faint); }
+.search-box input { width:100%; padding:7px 10px 7px 30px; border:1px solid var(--line); border-radius:6px; background:var(--surface); }
+.search-box input:focus-visible { outline:2px solid var(--ok); outline-offset:1px; }
+.chip { font-size:12px; font-weight:600; padding:7px 12px; border-radius:6px; border:1px solid var(--line); background:var(--surface); color:var(--ink-soft); }
+.chip.active.outlier { border-color:var(--alert); background:var(--alert-soft); color:var(--alert-dark); }
+.chip.active.semsus { border-color:var(--warn); background:var(--warn-soft); color:var(--warn-dark); }
+.min-input-wrap { display:none; align-items:center; gap:6px; font-size:12.5px; color:var(--ink-soft); }
+.min-input-wrap input { width:64px; padding:5px 7px; border:1px solid var(--line); border-radius:6px; }
+.results-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; font-size:13px; }
+.pager { display:flex; justify-content:flex-end; gap:8px; margin-top:12px; }
+.pager button { font-size:12px; font-weight:600; padding:6px 12px; border-radius:6px; border:1px solid var(--line); background:var(--surface); }
+.pager button:disabled { opacity:.4; cursor:default; }
+
+/* ---------- legend (charts) ---------- */
+.legend-row { display:flex; flex-wrap:wrap; gap:12px; margin-top:8px; font-size:12px; color:var(--ink-soft); }
+.legend-row span.dot { display:inline-block; width:9px; height:9px; border-radius:50%; margin-right:5px; }
+
+/* ---------- misc ---------- */
+.close-btn { background:none; border:0; padding:6px; border-radius:6px; color:var(--ink-soft); }
+footer.app-footer { max-width:1180px; margin:0 auto; padding:20px; font-size:12px; color:var(--ink-faint); }
+
+/* ---------- loader overlay (carregamento de dados a partir do CSV) ---------- */
+#data-loader-overlay { position:fixed; inset:0; z-index:9999; background:var(--bg); display:flex; align-items:center; justify-content:center; padding:20px; }
+.loader-card { background:var(--surface); border:1px solid var(--line); border-radius:14px; padding:36px 32px; max-width:440px; width:100%; text-align:center; box-shadow:0 12px 32px rgba(16,32,44,.10); }
+.loader-eyebrow { color:var(--ink-faint); font-size:11px; text-transform:uppercase; letter-spacing:.15em; margin-bottom:6px; }
+.loader-title { color:var(--ink); font-size:20px; font-weight:600; margin:0 0 14px; }
+.loader-message { color:var(--ink-soft); font-size:13px; margin:0 0 18px; }
+.loader-spinner { width:32px; height:32px; margin:0 auto; border-radius:50%; border:3px solid var(--line); border-top-color:var(--ok); animation:loaderSpin .8s linear infinite; }
+@keyframes loaderSpin { to { transform:rotate(360deg); } }
+.loader-manual { text-align:left; }
+.loader-hint { color:var(--ink-soft); font-size:12.5px; margin:0 0 10px; line-height:1.5; }
+.loader-hint code { font-family:ui-monospace,"SF Mono","IBM Plex Mono","Roboto Mono",Menlo,Consolas,monospace; background:var(--bg); padding:1px 5px; border-radius:4px; font-size:11.5px; }
+.loader-dropzone { display:flex; align-items:center; justify-content:center; text-align:center; gap:6px; border:1.5px dashed var(--line); border-radius:10px; padding:22px 14px; color:var(--ink-soft); font-size:13px; cursor:pointer; transition:border-color .15s,background .15s; }
+.loader-dropzone:hover, .loader-dropzone.drag-over { border-color:var(--ok); background:var(--ok-soft); color:var(--ok-dark); }
+.loader-error { color:var(--alert-dark); font-size:12px; margin-top:10px; min-height:1em; }
+</style>
+</head>
+<body>
+<div id="app">
+  <header class="app-header">
+    <svg class="pulse-bg" viewBox="0 0 1200 120" preserveAspectRatio="none" aria-hidden="true">
+      <path d="M-20,60 L60,60 L72,25 L84,95 L96,60 L260,60 L272,25 L284,95 L296,60 L460,60 L472,25 L484,95 L496,60 L660,60 L672,25 L684,95 L696,60 L860,60 L872,25 L884,95 L896,60 L1060,60 L1072,25 L1084,95 L1096,60 L1220,60"
+            fill="none" stroke="#3FB8C4" stroke-width="2" class="pulse-path" />
+    </svg>
+    <div class="header-inner">
+      <div>
+        <div class="brand-eyebrow">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#3FB8C4" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+          CNES · DataSUS
+        </div>
+        <h1 class="brand-title">Painel Leitos SUS</h1>
+        <p class="brand-sub">Monitoramento de capacidade hospitalar · painel mensal Jan–Jul/2026</p>
+      </div>
+      <div class="comp-picker">
+        <span>Competência</span>
+        <select id="comp-select" class="mono"></select>
+      </div>
+    </div>
+  </header>
+
+  <nav class="tabs">
+    <div class="wrap tabs-inner" id="tabs-inner">
+      <button class="tab-btn" data-tab="geral">Visão Geral</button>
+      <button class="tab-btn" data-tab="geografia">Geografia</button>
+      <button class="tab-btn" data-tab="perfil">Perfil</button>
+      <button class="tab-btn" data-tab="uti">UTI Especializada</button>
+      <button class="tab-btn" data-tab="evolucao">Evolução</button>
+      <button class="tab-btn" data-tab="ranking">Ranking &amp; Busca</button>
+    </div>
+  </nav>
+
+  <div id="filter-bar">
+    <div class="wrap">
+      <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="#9AA7AE" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
+      <div class="select-box">
+        <select id="regiao-select"><option value="">Todas as regiões</option></select>
+      </div>
+      <div class="select-box">
+        <select id="uf-select"><option value="">Todas as UFs</option></select>
+      </div>
+      <button id="clear-filters-btn">
+        <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        limpar
+      </button>
+    </div>
+  </div>
+
+  <main id="content" class="wrap"></main>
+
+  <footer class="app-footer">
+    Fonte: CNES/DataSUS — protótipo interativo sobre extrato Jan–Jul/2026 (LEITOS_SUS_2026.csv). Sem base de população, não é possível calcular leitos per capita.
+  </footer>
+</div>
+
+<script>
+/* =====================================================================
+   DADOS — extraídos e agregados de LEITOS_SUS_2026.csv (CNES, Jan–Jul/2026)
+   ===================================================================== */
+let DATA = null;
+
+/* =====================================================================
+   CARREGAMENTO E AGREGAÇÃO — a partir de LEITOS_SUS_2026.csv
+   (Antes os dados vinham embutidos aqui; agora são lidos e agregados
+   em tempo real a partir do CSV exportado pelo ETL_CNES_LEITOS.)
+   ===================================================================== */
+const CSV_FILENAME = "LEITOS_SUS_2026.csv";
+
+const NATUREZA_MAP = { "HOSPITAL_FILANTRÓPICO": "Filantrópico", "HOSPITAL_PRIVADO": "Privado", "HOSPITAL_PÚBLICO": "Público" };
+const GESTAO_MAP = { "D": "Dupla/DF", "E": "Estadual", "M": "Municipal" };
+const UTI_SUBTIPOS = [
+  { label: "Adulto", existCol: "UTI_ADULTO_EXIST", susCol: "UTI_ADULTO_SUS" },
+  { label: "Pediátrica", existCol: "UTI_PEDIATRICO_EXIST", susCol: "UTI_PEDIATRICO_SUS" },
+  { label: "Neonatal", existCol: "UTI_NEONATAL_EXIST", susCol: "UTI_NEONATAL_SUS" },
+  { label: "Queimados", existCol: "UTI_QUEIMADO_EXIST", susCol: "UTI_QUEIMADO_SUS" },
+  { label: "Coronariana", existCol: "UTI_CORONARIANA_EXIST", susCol: "UTI_CORONARIANA_SUS" }
+];
+const CSV_REQUIRED_COLS = [
+  "COMP", "REGIAO", "UF", "MUNICIPIO", "CNES", "NOME_ESTABELECIMENTO", "TP_GESTAO", "DS_TIPO_UNIDADE",
+  "DESC_NATUREZA_JURIDICA", "LEITOS_EXISTENTES", "LEITOS_SUS", "UTI_TOTAL_EXIST", "UTI_TOTAL_SUS",
+  "UTI_ADULTO_EXIST", "UTI_ADULTO_SUS", "UTI_PEDIATRICO_EXIST", "UTI_PEDIATRICO_SUS",
+  "UTI_NEONATAL_EXIST", "UTI_NEONATAL_SUS", "UTI_QUEIMADO_EXIST", "UTI_QUEIMADO_SUS",
+  "UTI_CORONARIANA_EXIST", "UTI_CORONARIANA_SUS"
+];
+
+function pctCalc(num, den) { return den > 0 ? Math.round(1000 * num / den) / 10 : null; }
+
+function toTitleCase(s) {
+  if (!s) return s;
+  return s.toLowerCase().replace(/(^|[^\p{L}])(\p{L})/gu, (m, sep, chr) => sep + chr.toUpperCase());
+}
+
+function splitCSVLine(line, delim) {
+  const result = [];
+  let cur = "", inQuotes = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (inQuotes) {
+      if (ch === '"') { if (line[i + 1] === '"') { cur += '"'; i++; } else { inQuotes = false; } }
+      else cur += ch;
+    } else {
+      if (ch === '"') inQuotes = true;
+      else if (ch === delim) { result.push(cur); cur = ""; }
+      else cur += ch;
+    }
+  }
+  result.push(cur);
+  return result;
+}
+
+function parseCSV(text) {
+  if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
+  const lines = text.split(/\r\n|\n|\r/).filter(l => l.length > 0);
+  if (lines.length < 2) throw new Error("O arquivo CSV está vazio ou não tem linhas de dados.");
+  const header = splitCSVLine(lines[0], ";").map(h => h.trim());
+  const idx = {};
+  header.forEach((h, i) => { idx[h] = i; });
+  for (const col of CSV_REQUIRED_COLS) {
+    if (!(col in idx)) throw new Error(`Coluna obrigatória ausente no CSV: ${col}`);
+  }
+  const numCols = header.length;
+  const rows = [];
+  for (let i = 1; i < lines.length; i++) {
+    const f = splitCSVLine(lines[i], ";");
+    if (f.length < numCols) continue;
+    const g = (col) => Number(f[idx[col]]) || 0;
+    rows.push({
+      comp: Number(f[idx.COMP]),
+      regiao: f[idx.REGIAO],
+      uf: f[idx.UF],
+      municipio: f[idx.MUNICIPIO],
+      cnes: f[idx.CNES],
+      nome: f[idx.NOME_ESTABELECIMENTO],
+      gestao: f[idx.TP_GESTAO],
+      tipo: f[idx.DS_TIPO_UNIDADE],
+      natureza: f[idx.DESC_NATUREZA_JURIDICA],
+      leitosExist: g("LEITOS_EXISTENTES"),
+      leitosSus: g("LEITOS_SUS"),
+      utiExist: g("UTI_TOTAL_EXIST"),
+      utiSus: g("UTI_TOTAL_SUS"),
+      uti: {
+        "Adulto": { exist: g("UTI_ADULTO_EXIST"), sus: g("UTI_ADULTO_SUS") },
+        "Pediátrica": { exist: g("UTI_PEDIATRICO_EXIST"), sus: g("UTI_PEDIATRICO_SUS") },
+        "Neonatal": { exist: g("UTI_NEONATAL_EXIST"), sus: g("UTI_NEONATAL_SUS") },
+        "Queimados": { exist: g("UTI_QUEIMADO_EXIST"), sus: g("UTI_QUEIMADO_SUS") },
+        "Coronariana": { exist: g("UTI_CORONARIANA_EXIST"), sus: g("UTI_CORONARIANA_SUS") }
+      }
+    });
+  }
+  if (rows.length === 0) throw new Error("Nenhuma linha de dados válida foi encontrada no CSV.");
+  return rows;
+}
+
+function groupBy(list, keyFn) {
+  const m = new Map();
+  list.forEach(item => {
+    const k = keyFn(item);
+    if (!m.has(k)) m.set(k, []);
+    m.get(k).push(item);
+  });
+  return m;
+}
+function sumField(list, field) { return list.reduce((s, r) => s + r[field], 0); }
+
+function buildData(rows) {
+  const competencias = Array.from(new Set(rows.map(r => r.comp))).sort((a, b) => a - b);
+  const byComp = new Map();
+  competencias.forEach(c => byComp.set(c, []));
+  rows.forEach(r => byComp.get(r.comp).push(r));
+
+  const kpisPorComp = competencias.map(c => {
+    const rs = byComp.get(c);
+    const leitosExist = sumField(rs, "leitosExist"), leitosSus = sumField(rs, "leitosSus");
+    const utiExist = sumField(rs, "utiExist"), utiSus = sumField(rs, "utiSus");
+    return { comp: c, estab: rs.length, leitosExist, leitosSus, pctLeitos: pctCalc(leitosSus, leitosExist), utiExist, utiSus, pctUti: pctCalc(utiSus, utiExist) };
+  });
+
+  const entradasSaidas = [];
+  for (let i = 1; i < competencias.length; i++) {
+    const c = competencias[i], cPrev = competencias[i - 1];
+    const atual = new Set(byComp.get(c).map(r => r.cnes));
+    const anterior = new Set(byComp.get(cPrev).map(r => r.cnes));
+    let entraram = 0, sairam = 0;
+    atual.forEach(x => { if (!anterior.has(x)) entraram++; });
+    anterior.forEach(x => { if (!atual.has(x)) sairam++; });
+    entradasSaidas.push({ comp: c, compAnterior: cPrev, entraram, sairam });
+  }
+
+  const porRegiaoPorComp = [], porUFPorComp = [], topMunicipiosPorComp = [];
+  const naturezaPorComp = [], gestaoPorComp = [], tipoUnidadePorComp = [];
+  const utiPorTipoPorComp = [], utiPorTipoPorRegiaoComp = [];
+
+  competencias.forEach(c => {
+    const rs = byComp.get(c);
+
+    const byRegiao = groupBy(rs, r => r.regiao);
+    byRegiao.forEach((list, regiao) => {
+      const leitosExist = sumField(list, "leitosExist"), leitosSus = sumField(list, "leitosSus");
+      const utiExist = sumField(list, "utiExist"), utiSus = sumField(list, "utiSus");
+      porRegiaoPorComp.push({ comp: c, regiao, estab: list.length, leitosExist, leitosSus, pctLeitos: pctCalc(leitosSus, leitosExist), utiExist, utiSus });
+    });
+
+    const byUF = groupBy(rs, r => r.uf);
+    byUF.forEach((list, uf) => {
+      const leitosExist = sumField(list, "leitosExist"), leitosSus = sumField(list, "leitosSus");
+      porUFPorComp.push({ comp: c, uf, regiao: list[0].regiao, estab: list.length, leitosExist, leitosSus, pctLeitos: pctCalc(leitosSus, leitosExist), utiSus: sumField(list, "utiSus") });
+    });
+
+    const byMuni = groupBy(rs, r => r.municipio + "|" + r.uf);
+    const muniEntries = [];
+    byMuni.forEach((list) => {
+      muniEntries.push({ comp: c, municipio: toTitleCase(list[0].municipio), uf: list[0].uf, estab: list.length, leitosSus: sumField(list, "leitosSus"), utiSus: sumField(list, "utiSus") });
+    });
+    muniEntries.sort((a, b) => b.leitosSus - a.leitosSus);
+    topMunicipiosPorComp.push(...muniEntries);
+
+    const byNatureza = groupBy(rs, r => NATUREZA_MAP[r.natureza] || r.natureza);
+    byNatureza.forEach((list, natureza) => {
+      const leitosExist = sumField(list, "leitosExist"), leitosSus = sumField(list, "leitosSus");
+      naturezaPorComp.push({ comp: c, natureza, estab: list.length, leitosExist, leitosSus, pctLeitos: pctCalc(leitosSus, leitosExist) });
+    });
+
+    const byGestao = groupBy(rs, r => GESTAO_MAP[r.gestao] || r.gestao);
+    byGestao.forEach((list, gestao) => {
+      const leitosExist = sumField(list, "leitosExist"), leitosSus = sumField(list, "leitosSus");
+      gestaoPorComp.push({ comp: c, gestao, estab: list.length, leitosExist, leitosSus, pctLeitos: pctCalc(leitosSus, leitosExist) });
+    });
+
+    const byTipo = groupBy(rs, r => toTitleCase(r.tipo));
+    byTipo.forEach((list, tipo) => {
+      const leitosExist = sumField(list, "leitosExist"), leitosSus = sumField(list, "leitosSus");
+      tipoUnidadePorComp.push({ comp: c, tipo, estab: list.length, leitosExist, leitosSus, pctLeitos: pctCalc(leitosSus, leitosExist) });
+    });
+
+    UTI_SUBTIPOS.forEach(({ label }) => {
+      utiPorTipoPorComp.push({
+        comp: c, tipo: label,
+        existente: rs.reduce((s, r) => s + r.uti[label].exist, 0),
+        sus: rs.reduce((s, r) => s + r.uti[label].sus, 0)
+      });
+    });
+
+    byRegiao.forEach((list, regiao) => {
+      UTI_SUBTIPOS.forEach(({ label }) => {
+        utiPorTipoPorRegiaoComp.push({ comp: c, regiao, tipo: label, sus: list.reduce((s, r) => s + r.uti[label].sus, 0) });
+      });
+    });
+  });
+
+  const competenciaMaisRecente = competencias[competencias.length - 1];
+  const rowsRecentes = byComp.get(competenciaMaisRecente);
+
+  const regiaoLookup = Array.from(new Set(rows.map(r => r.regiao))).sort();
+  const naturezaLookup = Array.from(new Set(rows.map(r => NATUREZA_MAP[r.natureza] || r.natureza))).sort();
+  const gestaoLookup = Array.from(new Set(rows.map(r => GESTAO_MAP[r.gestao] || r.gestao))).sort();
+  const tipoLookup = Array.from(new Set(rows.map(r => toTitleCase(r.tipo)))).sort();
+
+  const estabColunas = ["cnes", "nome", "municipio", "uf", "regiaoIdx", "naturezaIdx", "gestaoIdx", "tipoIdx", "leitosExist", "leitosSus", "utiExist", "utiSus"];
+  const estabelecimentos = rowsRecentes.map(r => [
+    r.cnes, toTitleCase(r.nome), toTitleCase(r.municipio), r.uf,
+    regiaoLookup.indexOf(r.regiao),
+    naturezaLookup.indexOf(NATUREZA_MAP[r.natureza] || r.natureza),
+    gestaoLookup.indexOf(GESTAO_MAP[r.gestao] || r.gestao),
+    tipoLookup.indexOf(toTitleCase(r.tipo)),
+    r.leitosExist, r.leitosSus, r.utiExist, r.utiSus
+  ]);
+
+  return {
+    kpisPorComp, entradasSaidas, porRegiaoPorComp, porUFPorComp, topMunicipiosPorComp,
+    naturezaPorComp, gestaoPorComp, tipoUnidadePorComp, utiPorTipoPorComp, utiPorTipoPorRegiaoComp,
+    estabColunas, estabelecimentos, competencias, competenciaMaisRecente,
+    estabLookups: { natureza: naturezaLookup, gestao: gestaoLookup, tipo: tipoLookup, regiao: regiaoLookup },
+    estabCompetencia: competenciaMaisRecente
+  };
+}
+
+
+/* =====================================================================
+   CONSTANTES
+   ===================================================================== */
+const MESES = {202601:"Jan/26",202602:"Fev/26",202603:"Mar/26",202604:"Abr/26",202605:"Mai/26",202606:"Jun/26",202607:"Jul/26"};
+const REGIAO_LABEL = {"CENTRO-OESTE":"Centro-Oeste","NORDESTE":"Nordeste","NORTE":"Norte","SUDESTE":"Sudeste","SUL":"Sul"};
+const REGIAO_ORDEM = ["NORTE","NORDESTE","CENTRO-OESTE","SUDESTE","SUL"];
+const REGIAO_COR = {"NORTE":"#1F8A70","NORDESTE":"#C08A2E","CENTRO-OESTE":"#6B7FD7","SUDESTE":"#0B7285","SUL":"#8E5FB0"};
+const UTI_TIPO_COR = {"Adulto":"#0B7285","Pediátrica":"#6B7FD7","Neonatal":"#1F8A70","Queimados":"#B4302A","Coronariana":"#C08A2E"};
+
+const ICONS = {
+  mappin: '<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0z"/><circle cx="12" cy="10" r="3"/></svg>',
+  alert: '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>',
+  search: '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>',
+  x: '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>',
+  arrowUp: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="7" y1="17" x2="17" y2="7"/><polyline points="7 7 17 7 17 17"/></svg>',
+  arrowDown: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="7" y1="7" x2="17" y2="17"/><polyline points="17 7 17 17 7 17"/></svg>',
+  sort: '<svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m21 16-4 4-4-4"/><path d="M17 20V4"/><path d="m3 8 4-4 4 4"/><path d="M7 4v16"/></svg>',
+  building: '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="2" width="16" height="20" rx="1"/><path d="M9 22v-4h6v4"/><path d="M8 6h.01M12 6h.01M16 6h.01M8 10h.01M12 10h.01M16 10h.01M8 14h.01M12 14h.01M16 14h.01"/></svg>',
+  bed: '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 18v-6a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v6"/><path d="M2 18h20"/><path d="M4 10V6a2 2 0 0 1 2-2h4v6"/><path d="M12 10V4"/></svg>',
+  activity: '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>'
+};
+
+/* =====================================================================
+   HELPERS
+   ===================================================================== */
+function esc(s) {
+  if (s === null || s === undefined) return "";
+  return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;");
+}
+function fmtNum(n) { return (n === null || n === undefined || isNaN(n)) ? "—" : Math.round(n).toLocaleString("pt-BR"); }
+function fmtPct(n) { return (n === null || n === undefined) ? "—" : `${n.toFixed(1).replace(".", ",")}%`; }
+function statusColor(pct) {
+  if (pct === null || pct === undefined) return "var(--ink-faint)";
+  if (pct >= 70) return "var(--ok)";
+  if (pct >= 50) return "var(--warn)";
+  return "var(--alert)";
+}
+function statusSoftBg(pct) {
+  if (pct === null || pct === undefined) return "#EEF1F2";
+  if (pct >= 70) return "var(--ok-soft)";
+  if (pct >= 50) return "var(--warn-soft)";
+  return "var(--alert-soft)";
+}
+function statusTextColor(pct) {
+  if (pct === null || pct === undefined) return "var(--ink-soft)";
+  if (pct >= 70) return "var(--ok-dark)";
+  if (pct >= 50) return "var(--warn-dark)";
+  return "var(--alert-dark)";
+}
+function badgeHtml(pct) {
+  return `<span class="badge mono" style="background:${statusSoftBg(pct)};color:${statusTextColor(pct)}">${fmtPct(pct)}</span>`;
+}
+function sparklineSVG(data, color, width, height) {
+  width = width || 88; height = height || 26;
+  if (!data || data.length < 2) return "";
+  const min = Math.min.apply(null, data), max = Math.max.apply(null, data);
+  const range = (max - min) || 1;
+  const stepX = width / (data.length - 1);
+  const pts = data.map((v,i) => [i*stepX, height - ((v-min)/range)*(height-4) - 2]);
+  const points = pts.map(p=>p.join(",")).join(" ");
+  const last = pts[pts.length-1];
+  return `<svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" class="spark">
+    <polyline points="${points}" fill="none" stroke="${color}" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" opacity="0.85"/>
+    <circle cx="${last[0]}" cy="${last[1]}" r="2.5" fill="${color}"/>
+  </svg>`;
+}
+function legendHtml(items) {
+  return `<div class="legend-row">${items.map(it=>`<span><span class="dot" style="background:${it.color}"></span>${esc(it.label)}</span>`).join("")}</div>`;
+}
+
+/* =====================================================================
+   ESTADO
+   ===================================================================== */
+const state = {
+  tab: "geral",
+  comp: null, // definido em iniciarComTexto() após o CSV ser carregado
+  regiao: null,
+  uf: null,
+  busca: "",
+  naturezaFiltro: null,
+  presetOutlier: false,
+  presetSemSus: false,
+  leitosMin: 300,
+  sortKey: "leitosExist",
+  sortDir: "desc",
+  page: 1,
+  municipioSelecionado: null
+};
+
+/* =====================================================================
+   DADOS DERIVADOS
+   ===================================================================== */
+function getKpiAtual() { return DATA.kpisPorComp.find(k => k.comp === state.comp); }
+function getKpiAnterior() {
+  const idx = DATA.competencias.indexOf(state.comp);
+  if (idx <= 0) return null;
+  const prevComp = DATA.competencias[idx - 1];
+  return { comp: prevComp, kpi: DATA.kpisPorComp.find(k => k.comp === prevComp) };
+}
+function getPorRegiaoAtual() {
+  return DATA.porRegiaoPorComp.filter(r => r.comp === state.comp).sort((a,b) => b.leitosSus - a.leitosSus);
+}
+function getPorUFAtual() {
+  let rows = DATA.porUFPorComp.filter(r => r.comp === state.comp);
+  if (state.regiao) rows = rows.filter(r => r.regiao === state.regiao);
+  return rows.sort((a,b) => b.leitosSus - a.leitosSus);
+}
+function getTopMunicipiosAtual() {
+  let rows = DATA.topMunicipiosPorComp.filter(r => r.comp === state.comp);
+  if (state.regiao) {
+    const ufs = new Set(DATA.porUFPorComp.filter(r => r.comp === state.comp && r.regiao === state.regiao).map(r => r.uf));
+    rows = rows.filter(r => ufs.has(r.uf));
+  }
+  if (state.uf) rows = rows.filter(r => r.uf === state.uf);
+  return rows.slice(0, 15);
+}
+function getNaturezaAtual() { return DATA.naturezaPorComp.filter(r => r.comp === state.comp).sort((a,b) => b.leitosExist - a.leitosExist); }
+function getGestaoAtual() { return DATA.gestaoPorComp.filter(r => r.comp === state.comp).sort((a,b) => b.leitosExist - a.leitosExist); }
+function getTipoAtual() { return DATA.tipoUnidadePorComp.filter(r => r.comp === state.comp).sort((a,b) => b.leitosExist - a.leitosExist); }
+function getUtiNacionalAtual() { return DATA.utiPorTipoPorComp.filter(r => r.comp === state.comp).sort((a,b) => b.sus - a.sus); }
+function getUtiPorRegiaoAtual() {
+  const rows = DATA.utiPorTipoPorRegiaoComp.filter(r => r.comp === state.comp);
+  const porRegiao = {};
+  REGIAO_ORDEM.forEach(r => porRegiao[r] = { regiao: r, regiaoLabel: REGIAO_LABEL[r] });
+  rows.forEach(r => { porRegiao[r.regiao][r.tipo] = r.sus; });
+  return REGIAO_ORDEM.map(r => porRegiao[r]);
+}
+function getUfOptionsList() {
+  const rows = DATA.porUFPorComp.filter(r => r.comp === state.comp && (!state.regiao || r.regiao === state.regiao));
+  return rows.map(r => r.uf).sort();
+}
+
+let ESTAB_OBJS = null;
+function getEstabObjs() {
+  if (ESTAB_OBJS) return ESTAB_OBJS;
+  const cols = DATA.estabColunas;
+  ESTAB_OBJS = DATA.estabelecimentos.map(r => {
+    const o = {};
+    cols.forEach((c,i) => o[c] = r[i]);
+    o.regiao = DATA.estabLookups.regiao[o.regiaoIdx];
+    o.natureza = DATA.estabLookups.natureza[o.naturezaIdx];
+    o.gestao = DATA.estabLookups.gestao[o.gestaoIdx];
+    o.tipo = DATA.estabLookups.tipo[o.tipoIdx];
+    o.pctLeitos = o.leitosExist > 0 ? Math.round(1000 * o.leitosSus / o.leitosExist) / 10 : null;
+    o.pctUti = o.utiExist > 0 ? Math.round(1000 * o.utiSus / o.utiExist) / 10 : null;
+    return o;
+  });
+  return ESTAB_OBJS;
+}
+function getEstabFiltrados() {
+  let list = getEstabObjs();
+  if (state.regiao) list = list.filter(e => e.regiao === state.regiao);
+  if (state.uf) list = list.filter(e => e.uf === state.uf);
+  if (state.naturezaFiltro) list = list.filter(e => e.natureza === state.naturezaFiltro);
+  if (state.presetOutlier) list = list.filter(e => e.leitosExist >= state.leitosMin);
+  if (state.presetSemSus) list = list.filter(e => e.leitosSus === 0);
+  if (state.busca.trim()) {
+    const q = state.busca.trim().toLowerCase();
+    list = list.filter(e => e.nome.toLowerCase().includes(q) || e.cnes.includes(q) || e.municipio.toLowerCase().includes(q));
+  }
+  const dir = state.sortDir === "asc" ? 1 : -1;
+  return list.slice().sort((a,b) => {
+    const av = a[state.sortKey], bv = b[state.sortKey];
+    if (av === null || av === undefined) return 1;
+    if (bv === null || bv === undefined) return -1;
+    if (typeof av === "string") return dir * av.localeCompare(bv);
+    return dir * ((av || 0) - (bv || 0));
+  });
+}
+function getEstabelecimentosDoMunicipio() {
+  if (!state.municipioSelecionado) return [];
+  return getEstabObjs()
+    .filter(e => e.municipio === state.municipioSelecionado.municipio && e.uf === state.municipioSelecionado.uf)
+    .sort((a,b) => b.leitosSus - a.leitosSus);
+}
+
+/* =====================================================================
+   CHART.JS — registro e config compartilhada
+   ===================================================================== */
+const chartRegistry = {};
+function makeChart(id, config) {
+  const canvas = document.getElementById(id);
+  if (!canvas) return;
+  if (chartRegistry[id]) { chartRegistry[id].destroy(); }
+  chartRegistry[id] = new Chart(canvas.getContext("2d"), config);
+}
+if (window.Chart) {
+  Chart.defaults.font.family = "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif";
+  Chart.defaults.font.size = 12;
+  Chart.defaults.color = "#55666F";
+  Chart.defaults.borderColor = "#DFE6E9";
+}
+const tooltipNumFormatter = { callbacks: { label: (ctx) => `${ctx.dataset.label}: ${fmtNum(ctx.raw)}` } };
+
+function nationalEvolutionConfig() {
+  return {
+    type: "line",
+    data: {
+      labels: DATA.kpisPorComp.map(k => MESES[k.comp]),
+      datasets: [
+        { label: "Leitos SUS", data: DATA.kpisPorComp.map(k => k.leitosSus), borderColor: "#0B7285", backgroundColor: "#0B7285", tension: .3, pointRadius: 3, yAxisID: "y" },
+        { label: "UTI SUS", data: DATA.kpisPorComp.map(k => k.utiSus), borderColor: "#6B7FD7", backgroundColor: "#6B7FD7", tension: .3, pointRadius: 3, yAxisID: "y1" }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      interaction: { mode: "index", intersect: false },
+      scales: {
+        y: { ticks: { callback: v => fmtNum(v) } },
+        y1: { position: "right", grid: { drawOnChartArea: false }, ticks: { callback: v => fmtNum(v) } }
+      },
+      plugins: { legend: { position: "bottom", labels: { boxWidth: 10, usePointStyle: true } }, tooltip: tooltipNumFormatter }
+    }
+  };
+}
+
+/* =====================================================================
+   RENDER — SHELL (header / tabs / filter bar)
+   ===================================================================== */
+function initShell() {
+  const compSelect = document.getElementById("comp-select");
+  compSelect.innerHTML = DATA.competencias.map(c => `<option value="${c}">${MESES[c]}</option>`).join("");
+  compSelect.value = state.comp;
+  compSelect.addEventListener("change", () => {
+    state.comp = Number(compSelect.value);
+    refreshUfSelect();
+    renderTab();
+  });
+
+  const regiaoSelect = document.getElementById("regiao-select");
+  regiaoSelect.innerHTML = `<option value="">Todas as regiões</option>` + REGIAO_ORDEM.map(r => `<option value="${r}">${REGIAO_LABEL[r]}</option>`).join("");
+  regiaoSelect.addEventListener("change", () => {
+    state.regiao = regiaoSelect.value || null;
+    state.uf = null;
+    state.municipioSelecionado = null;
+    state.page = 1;
+    refreshUfSelect();
+    updateClearBtn();
+    renderTab();
+  });
+
+  const ufSelect = document.getElementById("uf-select");
+  ufSelect.addEventListener("change", () => {
+    state.uf = ufSelect.value || null;
+    state.page = 1;
+    updateClearBtn();
+    renderTab();
+  });
+
+  document.getElementById("clear-filters-btn").addEventListener("click", () => {
+    state.regiao = null; state.uf = null; state.municipioSelecionado = null;
+    regiaoSelect.value = ""; refreshUfSelect();
+    updateClearBtn();
+    renderTab();
+  });
+
+  document.getElementById("tabs-inner").addEventListener("click", (e) => {
+    const btn = e.target.closest("[data-tab]");
+    if (!btn) return;
+    state.tab = btn.dataset.tab;
+    state.page = 1;
+    renderTab();
+  });
+
+  refreshUfSelect();
+
+  // Delegação global para o conteúdo (cliques, input, change)
+  const content = document.getElementById("content");
+  content.addEventListener("click", onContentClick);
+  content.addEventListener("input", onContentInput);
+  content.addEventListener("change", onContentChange);
+}
+
+function refreshUfSelect() {
+  const ufSelect = document.getElementById("uf-select");
+  const options = getUfOptionsList();
+  const current = state.uf;
+  ufSelect.innerHTML = `<option value="">Todas as UFs</option>` + options.map(uf => `<option value="${uf}">${uf}</option>`).join("");
+  if (current && options.includes(current)) ufSelect.value = current;
+  else { ufSelect.value = ""; state.uf = null; }
+}
+function updateClearBtn() {
+  document.getElementById("clear-filters-btn").style.display = (state.regiao || state.uf) ? "flex" : "none";
+}
+function updateTabsUI() {
+  document.querySelectorAll(".tab-btn").forEach(b => b.classList.toggle("active", b.dataset.tab === state.tab));
+}
+function updateFilterBarVisibility() {
+  const show = ["geografia","perfil","uti","ranking"].includes(state.tab);
+  document.getElementById("filter-bar").style.display = show ? "block" : "none";
+}
+
+/* =====================================================================
+   DELEGAÇÃO DE EVENTOS (dentro de #content)
+   ===================================================================== */
+function onContentClick(e) {
+  const muniRow = e.target.closest("[data-municipio]");
+  if (muniRow) {
+    state.municipioSelecionado = { municipio: muniRow.dataset.municipio, uf: muniRow.dataset.uf };
+    renderTab();
+    return;
+  }
+  const closeDrill = e.target.closest('[data-action="close-drilldown"]');
+  if (closeDrill) { state.municipioSelecionado = null; renderTab(); return; }
+
+  const sortTh = e.target.closest("[data-sort-key]");
+  if (sortTh) { toggleSort(sortTh.dataset.sortKey); return; }
+
+  const pageBtn = e.target.closest("[data-page]");
+  if (pageBtn) {
+    if (pageBtn.disabled) return;
+    if (pageBtn.dataset.page === "prev") state.page = Math.max(1, state.page - 1);
+    if (pageBtn.dataset.page === "next") state.page = state.page + 1;
+    renderRankingResults();
+    return;
+  }
+
+  const presetBtn = e.target.closest("[data-preset]");
+  if (presetBtn) {
+    const p = presetBtn.dataset.preset;
+    if (p === "outlier") { state.presetOutlier = !state.presetOutlier; state.presetSemSus = false; }
+    if (p === "semsus") { state.presetSemSus = !state.presetSemSus; state.presetOutlier = false; }
+    state.page = 1;
+    const ob = document.getElementById("preset-outlier-btn"), sb = document.getElementById("preset-semsus-btn");
+    if (ob) ob.classList.toggle("active", state.presetOutlier);
+    if (sb) sb.classList.toggle("active", state.presetSemSus);
+    const minWrap = document.getElementById("leitos-min-wrap");
+    if (minWrap) minWrap.style.display = state.presetOutlier ? "flex" : "none";
+    renderRankingResults();
+    return;
+  }
+}
+function onContentInput(e) {
+  if (e.target.id === "busca-input") { state.busca = e.target.value; state.page = 1; renderRankingResults(); }
+  if (e.target.id === "leitos-min-input") { state.leitosMin = Number(e.target.value) || 0; state.page = 1; renderRankingResults(); }
+}
+function onContentChange(e) {
+  if (e.target.id === "natureza-select") { state.naturezaFiltro = e.target.value || null; state.page = 1; renderRankingResults(); }
+}
+function toggleSort(key) {
+  if (state.sortKey === key) state.sortDir = state.sortDir === "asc" ? "desc" : "asc";
+  else { state.sortKey = key; state.sortDir = "desc"; }
+  state.page = 1;
+  renderRankingResults();
+}
+
+/* =====================================================================
+   TAB: VISÃO GERAL
+   ===================================================================== */
+function buildGeralTab() {
+  const k = getKpiAtual();
+  if (!k) return "";
+  const sparkLeitos = DATA.kpisPorComp.map(x => x.leitosSus);
+  const sparkUti = DATA.kpisPorComp.map(x => x.utiSus);
+  const sparkEstab = DATA.kpisPorComp.map(x => x.estab);
+  const anterior = getKpiAnterior();
+
+  let momHtml = "";
+  if (anterior && anterior.kpi) {
+    const metrics = [
+      { label: "Leitos SUS", atual: k.leitosSus, ant: anterior.kpi.leitosSus },
+      { label: "UTI SUS", atual: k.utiSus, ant: anterior.kpi.utiSus },
+      { label: "Estabelecimentos", atual: k.estab, ant: anterior.kpi.estab }
+    ];
+    momHtml = `<div class="card mom-card">
+      <span class="mom-label">vs. ${MESES[anterior.comp]}</span>
+      ${metrics.map(m => {
+        const delta = m.atual - m.ant, up = delta >= 0;
+        return `<div class="mom-item"><span class="muted">${esc(m.label)}</span>
+          <span class="mom-delta mono" style="color:${up ? "var(--ok-dark)" : "var(--alert-dark)"}">
+            ${up ? ICONS.arrowUp : ICONS.arrowDown}${up ? "+" : ""}${fmtNum(delta)}
+          </span></div>`;
+      }).join("")}
+    </div>`;
+  }
+
+  return `<div class="stack">
+    <div>
+      <div class="section-head">
+        <div class="eyebrow">Competência ${MESES[state.comp]}</div>
+        <h3 class="section-title">Indicadores nacionais</h3>
+        <p class="section-note">Sparklines mostram a série real Jan–Jul/2026 de cada indicador.</p>
+      </div>
+      <div class="kpi-grid">
+        <div class="kpi-card"><div class="kpi-top"><span class="kpi-label">Estabelecimentos</span>${ICONS.building}</div>
+          <div class="kpi-mid"><div><div class="kpi-value mono">${fmtNum(k.estab)}</div></div>${sparklineSVG(sparkEstab, "var(--ink-soft)")}</div></div>
+        <div class="kpi-card"><div class="kpi-top"><span class="kpi-label">Leitos existentes</span>${ICONS.bed}</div>
+          <div class="kpi-mid"><div><div class="kpi-value mono">${fmtNum(k.leitosExist)}</div></div></div></div>
+        <div class="kpi-card"><div class="kpi-top"><span class="kpi-label">Leitos SUS</span>${ICONS.bed}</div>
+          <div class="kpi-mid"><div><div class="kpi-value mono">${fmtNum(k.leitosSus)}</div></div>${sparklineSVG(sparkLeitos, "var(--ok)")}</div>
+          <div class="kpi-badge mono" style="background:${statusSoftBg(k.pctLeitos)};color:${statusTextColor(k.pctLeitos)}">${fmtPct(k.pctLeitos)} cobertura SUS</div></div>
+        <div class="kpi-card"><div class="kpi-top"><span class="kpi-label">UTI existente</span>${ICONS.activity}</div>
+          <div class="kpi-mid"><div><div class="kpi-value mono">${fmtNum(k.utiExist)}</div></div></div></div>
+        <div class="kpi-card"><div class="kpi-top"><span class="kpi-label">UTI SUS</span>${ICONS.activity}</div>
+          <div class="kpi-mid"><div><div class="kpi-value mono">${fmtNum(k.utiSus)}</div></div>${sparklineSVG(sparkUti, "#6B7FD7")}</div>
+          <div class="kpi-badge mono" style="background:${statusSoftBg(k.pctUti)};color:${statusTextColor(k.pctUti)}">${fmtPct(k.pctUti)} cobertura SUS</div></div>
+      </div>
+    </div>
+    ${momHtml}
+    <div class="card">
+      <div class="section-head"><div class="eyebrow">Módulo 5 · prévia</div><h3 class="section-title">Evolução nacional Jan–Jul/2026</h3></div>
+      <div class="chart-wrap" style="height:260px;"><canvas id="chart-geral-evolucao"></canvas></div>
+    </div>
+  </div>`;
+}
+function mountGeralCharts() { makeChart("chart-geral-evolucao", nationalEvolutionConfig()); }
+
+/* =====================================================================
+   TAB: GEOGRAFIA
+   ===================================================================== */
+function buildGeografiaTab() {
+  const porRegiao = getPorRegiaoAtual();
+  const porUF = getPorUFAtual();
+  const topMun = getTopMunicipiosAtual();
+
+  let drillHtml = "";
+  if (state.municipioSelecionado) {
+    const estabs = getEstabelecimentosDoMunicipio();
+    drillHtml = `<div class="card">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+        <div>
+          <div class="eyebrow">Drill-down · Jul/2026</div>
+          <h3 class="section-title">Estabelecimentos em ${esc(state.municipioSelecionado.municipio)} (${esc(state.municipioSelecionado.uf)})</h3>
+        </div>
+        <button class="close-btn" data-action="close-drilldown">${ICONS.x}</button>
+      </div>
+      <div class="table-scroll"><table>
+        <thead><tr><th>Estabelecimento</th><th>Natureza</th><th>Leitos</th><th>SUS</th><th>%</th></tr></thead>
+        <tbody>
+          ${estabs.length === 0 ? `<tr><td colspan="5" style="text-align:center;padding:18px;color:var(--ink-faint);">Nenhum estabelecimento encontrado no recorte atual.</td></tr>` :
+            estabs.map(e => `<tr>
+              <td>${esc(e.nome)}</td>
+              <td class="muted">${esc(e.natureza)}</td>
+              <td class="mono">${fmtNum(e.leitosExist)}</td>
+              <td class="mono">${fmtNum(e.leitosSus)}</td>
+              <td>${badgeHtml(e.pctLeitos)}</td>
+            </tr>`).join("")}
+        </tbody>
+      </table></div>
+    </div>`;
+  }
+
+  return `<div class="stack">
+    <div class="card">
+      <div class="section-head"><div class="eyebrow">${MESES[state.comp]}</div><h3 class="section-title">Leitos existentes vs. SUS por região</h3></div>
+      <div class="chart-wrap" style="height:280px;"><canvas id="chart-geografia-regiao"></canvas></div>
+    </div>
+    <div class="grid grid-2">
+      <div class="card">
+        <div class="section-head"><div class="eyebrow">Ranking</div><h3 class="section-title">Unidades federativas</h3><p class="section-note">${porUF.length} UF(s) — ordenado por leitos SUS</p></div>
+        <div class="table-scroll"><table>
+          <thead><tr><th>UF</th><th>Estab.</th><th>Leitos SUS</th><th>UTI SUS</th><th>% SUS</th></tr></thead>
+          <tbody>${porUF.map(r => `<tr>
+            <td class="mono" style="font-weight:600;">${r.uf}</td>
+            <td class="mono">${fmtNum(r.estab)}</td>
+            <td class="mono">${fmtNum(r.leitosSus)}</td>
+            <td class="mono">${fmtNum(r.utiSus)}</td>
+            <td>${badgeHtml(r.pctLeitos)}</td>
+          </tr>`).join("")}</tbody>
+        </table></div>
+      </div>
+      <div class="card">
+        <div class="section-head"><div class="eyebrow">Ranking</div><h3 class="section-title">Municípios</h3><p class="section-note">Clique em um município para ver os estabelecimentos (dados de Jul/2026).</p></div>
+        <div class="table-scroll"><table>
+          <thead><tr><th>Município</th><th>UF</th><th>Leitos SUS</th><th>UTI SUS</th></tr></thead>
+          <tbody>${topMun.map(r => `<tr class="clickable" data-municipio="${esc(r.municipio)}" data-uf="${esc(r.uf)}">
+            <td>${ICONS.mappin}${esc(r.municipio)}</td>
+            <td class="mono">${r.uf}</td>
+            <td class="mono">${fmtNum(r.leitosSus)}</td>
+            <td class="mono">${fmtNum(r.utiSus)}</td>
+          </tr>`).join("")}</tbody>
+        </table></div>
+      </div>
+    </div>
+    ${drillHtml}
+  </div>`;
+}
+function mountGeografiaCharts() {
+  const porRegiao = getPorRegiaoAtual();
+  makeChart("chart-geografia-regiao", {
+    type: "bar",
+    data: {
+      labels: porRegiao.map(r => REGIAO_LABEL[r.regiao]),
+      datasets: [
+        { label: "Existentes", data: porRegiao.map(r => r.leitosExist), backgroundColor: "#C7D1D5", borderRadius: 3 },
+        { label: "SUS", data: porRegiao.map(r => r.leitosSus), backgroundColor: "#0B7285", borderRadius: 3 }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      scales: { y: { beginAtZero: true, ticks: { callback: v => fmtNum(v) } } },
+      plugins: { legend: { position: "bottom" }, tooltip: tooltipNumFormatter }
+    }
+  });
+}
+
+/* =====================================================================
+   TAB: PERFIL
+   ===================================================================== */
+function profilePanelHtml(title, rows, keyField) {
+  return `<div class="card">
+    <div class="section-head"><div class="eyebrow">${MESES[state.comp]}</div><h3 class="section-title">${esc(title)}</h3></div>
+    ${rows.map(r => `<div class="profile-row">
+      <div class="profile-top"><span style="font-weight:500;">${esc(r[keyField])}</span><span class="mono muted" style="font-size:12px;">${fmtNum(r.estab)} estab.</span></div>
+      <div class="profile-track"><div class="profile-fill" style="width:${r.pctLeitos || 0}%;background:${statusColor(r.pctLeitos)}"></div></div>
+      <div class="profile-bottom"><span>${fmtNum(r.leitosSus)} de ${fmtNum(r.leitosExist)} leitos SUS</span><span class="mono" style="font-weight:600;color:${statusTextColor(r.pctLeitos)}">${fmtPct(r.pctLeitos)}</span></div>
+    </div>`).join("")}
+  </div>`;
+}
+function buildPerfilTab() {
+  return `<div class="grid grid-3">
+    ${profilePanelHtml("Natureza jurídica", getNaturezaAtual(), "natureza")}
+    ${profilePanelHtml("Tipo de gestão", getGestaoAtual(), "gestao")}
+    ${profilePanelHtml("Tipo de unidade", getTipoAtual(), "tipo")}
+  </div>`;
+}
+
+/* =====================================================================
+   TAB: UTI ESPECIALIZADA
+   ===================================================================== */
+function buildUtiTab() {
+  const utiNacional = getUtiNacionalAtual();
+  return `<div class="stack">
+    <div class="card">
+      <div class="section-head"><div class="eyebrow">${MESES[state.comp]}</div><h3 class="section-title">UTI SUS por tipo (nacional)</h3><p class="section-note">Ordenado do maior para o menor volume.</p></div>
+      <div class="chart-wrap" style="height:260px;"><canvas id="chart-uti-nacional"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="section-head"><div class="eyebrow">${MESES[state.comp]}</div><h3 class="section-title">UTI SUS por região e tipo</h3></div>
+      <div class="chart-wrap" style="height:300px;"><canvas id="chart-uti-regiao"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="section-head"><div class="eyebrow">${MESES[state.comp]}</div><h3 class="section-title">Tabela detalhada</h3></div>
+      <div class="table-scroll"><table>
+        <thead><tr><th>Tipo de UTI</th><th>Existente</th><th>SUS</th><th>% SUS</th></tr></thead>
+        <tbody>${utiNacional.map(r => {
+          const pct = r.existente > 0 ? Math.round(1000 * r.sus / r.existente) / 10 : null;
+          return `<tr>
+            <td><span class="dot" style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${UTI_TIPO_COR[r.tipo]};margin-right:7px;"></span>${esc(r.tipo)}</td>
+            <td class="mono">${fmtNum(r.existente)}</td>
+            <td class="mono">${fmtNum(r.sus)}</td>
+            <td>${badgeHtml(pct)}</td>
+          </tr>`;
+        }).join("")}</tbody>
+      </table></div>
+    </div>
+  </div>`;
+}
+function mountUtiCharts() {
+  const utiNacional = getUtiNacionalAtual();
+  makeChart("chart-uti-nacional", {
+    type: "bar",
+    data: {
+      labels: utiNacional.map(r => r.tipo),
+      datasets: [
+        { label: "Existente", data: utiNacional.map(r => r.existente), backgroundColor: "#C7D1D5", borderRadius: 3 },
+        { label: "SUS", data: utiNacional.map(r => r.sus), backgroundColor: utiNacional.map(r => UTI_TIPO_COR[r.tipo] || "#0B7285"), borderRadius: 3 }
+      ]
+    },
+    options: {
+      indexAxis: "y", responsive: true, maintainAspectRatio: false,
+      scales: { x: { beginAtZero: true, ticks: { callback: v => fmtNum(v) } } },
+      plugins: { legend: { position: "bottom" }, tooltip: tooltipNumFormatter }
+    }
+  });
+
+  const utiRegiao = getUtiPorRegiaoAtual();
+  makeChart("chart-uti-regiao", {
+    type: "bar",
+    data: {
+      labels: utiRegiao.map(r => r.regiaoLabel),
+      datasets: Object.keys(UTI_TIPO_COR).map(tipo => ({
+        label: tipo, data: utiRegiao.map(r => r[tipo] || 0), backgroundColor: UTI_TIPO_COR[tipo]
+      }))
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      scales: { x: { stacked: true }, y: { stacked: true, beginAtZero: true, ticks: { callback: v => fmtNum(v) } } },
+      plugins: { legend: { position: "bottom" }, tooltip: tooltipNumFormatter }
+    }
+  });
+}
+
+/* =====================================================================
+   TAB: EVOLUÇÃO
+   ===================================================================== */
+function buildEvolucaoTab() {
+  return `<div class="stack">
+    <div class="card">
+      <div class="section-head"><div class="eyebrow">Jan–Jul/2026</div><h3 class="section-title">Série nacional — leitos e UTI SUS</h3></div>
+      <div class="chart-wrap" style="height:260px;"><canvas id="chart-evolucao-nacional"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="section-head"><div class="eyebrow">Jan–Jul/2026</div><h3 class="section-title">Leitos SUS por região</h3></div>
+      <div class="chart-wrap" style="height:280px;"><canvas id="chart-evolucao-regional"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="section-head"><div class="eyebrow">CNES · churn</div><h3 class="section-title">Entradas e saídas de estabelecimentos</h3>
+        <p class="section-note">Baseado na presença do CNES mês a mês — não depende de MOTIVO_DESABILITACAO (100% nulo na base).</p></div>
+      <div class="chart-wrap" style="height:240px;"><canvas id="chart-evolucao-churn"></canvas></div>
+    </div>
+  </div>`;
+}
+function mountEvolucaoCharts() {
+  makeChart("chart-evolucao-nacional", nationalEvolutionConfig());
+
+  makeChart("chart-evolucao-regional", {
+    type: "line",
+    data: {
+      labels: DATA.competencias.map(c => MESES[c]),
+      datasets: REGIAO_ORDEM.map(r => ({
+        label: REGIAO_LABEL[r],
+        data: DATA.competencias.map(c => {
+          const row = DATA.porRegiaoPorComp.find(x => x.comp === c && x.regiao === r);
+          return row ? row.leitosSus : null;
+        }),
+        borderColor: REGIAO_COR[r], backgroundColor: REGIAO_COR[r], tension: .3, pointRadius: 2.5
+      }))
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      scales: { y: { ticks: { callback: v => fmtNum(v) } } },
+      plugins: { legend: { position: "bottom", labels: { boxWidth: 10, usePointStyle: true } }, tooltip: tooltipNumFormatter }
+    }
+  });
+
+  makeChart("chart-evolucao-churn", {
+    type: "bar",
+    data: {
+      labels: DATA.entradasSaidas.map(e => MESES[e.comp]),
+      datasets: [
+        { label: "Entraram", data: DATA.entradasSaidas.map(e => e.entraram), backgroundColor: "#0B7285", borderRadius: 3 },
+        { label: "Saíram", data: DATA.entradasSaidas.map(e => -e.sairam), backgroundColor: "#B4302A", borderRadius: 3 }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      scales: { y: { ticks: { callback: v => fmtNum(Math.abs(v)) } } },
+      plugins: {
+        legend: { position: "bottom" },
+        tooltip: { callbacks: { label: ctx => `${ctx.dataset.label}: ${fmtNum(Math.abs(ctx.raw))}` } }
+      }
+    }
+  });
+}
+
+/* =====================================================================
+   TAB: RANKING & BUSCA
+   ===================================================================== */
+function buildRankingTab() {
+  return `<div class="stack">
+    <div class="card">
+      <div class="notice">${ICONS.alert}<span>Detalhamento por estabelecimento disponível para a competência mais recente (Jul/2026) neste protótipo — a versão de produção consultaria a base completa a cada competência via as queries SQL fornecidas.</span></div>
+      <div class="filter-row">
+        <div class="search-box">${ICONS.search}<input id="busca-input" type="text" placeholder="Buscar por nome, CNES ou município…" value="${esc(state.busca)}" /></div>
+        <div class="select-box"><select id="natureza-select">
+          <option value="">Todas as naturezas</option>
+          ${DATA.estabLookups.natureza.map(n => `<option value="${esc(n)}" ${state.naturezaFiltro===n?"selected":""}>${esc(n)}</option>`).join("")}
+        </select></div>
+        <button id="preset-outlier-btn" class="chip outlier ${state.presetOutlier?"active":""}" data-preset="outlier">Grandes com baixa % SUS</button>
+        <button id="preset-semsus-btn" class="chip semsus ${state.presetSemSus?"active":""}" data-preset="semsus">Sem nenhum leito SUS</button>
+        <div id="leitos-min-wrap" class="min-input-wrap" style="display:${state.presetOutlier?"flex":"none"};">
+          ≥ <input id="leitos-min-input" type="number" value="${state.leitosMin}" /> leitos
+        </div>
+      </div>
+    </div>
+    <div class="card" id="ranking-results-card">
+      <div id="ranking-results"></div>
+    </div>
+  </div>`;
+}
+function rankingColumns() {
+  return [
+    { key: "nome", label: "Estabelecimento" },
+    { key: "municipio", label: "Município" },
+    { key: "uf", label: "UF" },
+    { key: "natureza", label: "Natureza" },
+    { key: "leitosExist", label: "Leitos" },
+    { key: "leitosSus", label: "SUS" },
+    { key: "pctLeitos", label: "% SUS" }
+  ];
+}
+function renderRankingResults() {
+  const container = document.getElementById("ranking-results");
+  if (!container) return;
+  const filtrados = getEstabFiltrados();
+  const pageSize = 12;
+  const totalPages = Math.max(1, Math.ceil(filtrados.length / pageSize));
+  state.page = Math.min(state.page, totalPages);
+  const pageRows = filtrados.slice((state.page - 1) * pageSize, state.page * pageSize);
+
+  container.innerHTML = `
+    <div class="results-head">
+      <span class="muted">${fmtNum(filtrados.length)} estabelecimento(s) encontrado(s)</span>
+      <span class="mono muted" style="font-size:12px;">página ${state.page} de ${totalPages}</span>
+    </div>
+    <div class="table-scroll"><table>
+      <thead><tr>
+        ${rankingColumns().map(c => `<th data-sort-key="${c.key}"><button>${esc(c.label)}<span style="opacity:${state.sortKey===c.key?1:.35}">${ICONS.sort}</span></button></th>`).join("")}
+      </tr></thead>
+      <tbody>
+        ${pageRows.length === 0 ? `<tr><td colspan="7" style="text-align:center;padding:22px;color:var(--ink-faint);">Nenhum resultado para os filtros atuais.</td></tr>` :
+          pageRows.map(e => `<tr>
+            <td class="truncate" title="${esc(e.nome)}">${esc(e.nome)}</td>
+            <td class="muted">${esc(e.municipio)}</td>
+            <td class="mono">${e.uf}</td>
+            <td class="muted">${esc(e.natureza)}</td>
+            <td class="mono">${fmtNum(e.leitosExist)}</td>
+            <td class="mono">${fmtNum(e.leitosSus)}</td>
+            <td>${badgeHtml(e.pctLeitos)}</td>
+          </tr>`).join("")}
+      </tbody>
+    </table></div>
+    <div class="pager">
+      <button data-page="prev" ${state.page<=1?"disabled":""}>Anterior</button>
+      <button data-page="next" ${state.page>=totalPages?"disabled":""}>Próxima</button>
+    </div>
+  `;
+}
+
+/* =====================================================================
+   DISPATCH PRINCIPAL
+   ===================================================================== */
+function renderTab() {
+  updateFilterBarVisibility();
+  updateTabsUI();
+  document.getElementById("comp-select").value = state.comp;
+  updateClearBtn();
+
+  const content = document.getElementById("content");
+  switch (state.tab) {
+    case "geral":
+      content.innerHTML = buildGeralTab();
+      mountGeralCharts();
+      break;
+    case "geografia":
+      content.innerHTML = buildGeografiaTab();
+      mountGeografiaCharts();
+      break;
+    case "perfil":
+      content.innerHTML = buildPerfilTab();
+      break;
+    case "uti":
+      content.innerHTML = buildUtiTab();
+      mountUtiCharts();
+      break;
+    case "evolucao":
+      content.innerHTML = buildEvolucaoTab();
+      mountEvolucaoCharts();
+      break;
+    case "ranking":
+      content.innerHTML = buildRankingTab();
+      renderRankingResults();
+      break;
+  }
+}
+
+/* =====================================================================
+   INIT
+   ===================================================================== */
+/* =====================================================================
+   CARREGAMENTO — overlay, seleção manual e inicialização
+   ===================================================================== */
+function criarOverlayCarregamento() {
+  const overlay = document.createElement("div");
+  overlay.id = "data-loader-overlay";
+  overlay.innerHTML = `
+    <div class="loader-card">
+      <div class="loader-eyebrow">CNES · DataSUS</div>
+      <h2 class="loader-title">Painel Leitos SUS</h2>
+      <p id="loader-message" class="loader-message">Carregando dados de ${CSV_FILENAME}…</p>
+      <div id="loader-spinner" class="loader-spinner"></div>
+      <div id="loader-manual" class="loader-manual" style="display:none;">
+        <p class="loader-hint">O navegador não conseguiu ler o arquivo automaticamente (por segurança, páginas locais não têm acesso direto ao disco). Selecione o arquivo manualmente:</p>
+        <p class="loader-hint">Normalmente ele está em <code>C:\\ETL_CNES_LEITOS\\saida\\${CSV_FILENAME}</code></p>
+        <label class="loader-dropzone" id="loader-dropzone">
+          <input type="file" id="loader-file-input" accept=".csv,text/csv" hidden />
+          <span>Arraste o arquivo aqui ou <strong>clique para selecionar</strong></span>
+        </label>
+        <div id="loader-error" class="loader-error"></div>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+}
+
+function mostrarErroCarregamento(msg) {
+  const el = document.getElementById("loader-error");
+  if (el) el.textContent = msg || "";
+}
+
+function mostrarSelecaoManual(motivo) {
+  const spinner = document.getElementById("loader-spinner");
+  const manual = document.getElementById("loader-manual");
+  const msg = document.getElementById("loader-message");
+  if (spinner) spinner.style.display = "none";
+  if (manual) manual.style.display = "block";
+  if (msg) msg.textContent = motivo || "Selecione o arquivo de dados para continuar.";
+}
+
+function ocultarOverlayCarregamento() {
+  const overlay = document.getElementById("data-loader-overlay");
+  if (overlay) overlay.remove();
+}
+
+function iniciarComTexto(texto, nomeArquivo) {
+  try {
+    const rows = parseCSV(texto);
+    DATA = buildData(rows);
+    state.comp = DATA.competenciaMaisRecente;
+  } catch (err) {
+    mostrarSelecaoManual(`Não foi possível processar "${nomeArquivo || CSV_FILENAME}".`);
+    mostrarErroCarregamento(err.message);
+    return;
+  }
+  ocultarOverlayCarregamento();
+  initShell();
+  renderTab();
+}
+
+function configurarSelecaoManual() {
+  const input = document.getElementById("loader-file-input");
+  const dropzone = document.getElementById("loader-dropzone");
+  if (!input || !dropzone) return;
+
+  function handleFile(file) {
+    if (!file) return;
+    mostrarErroCarregamento("");
+    const reader = new FileReader();
+    reader.onload = () => iniciarComTexto(reader.result, file.name);
+    reader.onerror = () => mostrarErroCarregamento("Não foi possível ler o arquivo selecionado.");
+    reader.readAsText(file, "utf-8");
+  }
+
+  input.addEventListener("change", () => handleFile(input.files && input.files[0]));
+  dropzone.addEventListener("dragover", (e) => { e.preventDefault(); dropzone.classList.add("drag-over"); });
+  dropzone.addEventListener("dragleave", () => dropzone.classList.remove("drag-over"));
+  dropzone.addEventListener("drop", (e) => {
+    e.preventDefault();
+    dropzone.classList.remove("drag-over");
+    const file = e.dataTransfer.files && e.dataTransfer.files[0];
+    handleFile(file);
+  });
+}
+
+async function carregarDadosAutomaticamente() {
+  try {
+    const resp = await fetch(CSV_FILENAME, { cache: "no-store" });
+    if (!resp.ok) throw new Error("HTTP " + resp.status);
+    const texto = await resp.text();
+    iniciarComTexto(texto, CSV_FILENAME);
+  } catch (err) {
+    configurarSelecaoManual();
+    mostrarSelecaoManual(`Não foi possível carregar "${CSV_FILENAME}" automaticamente.`);
+  }
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+  criarOverlayCarregamento();
+  carregarDadosAutomaticamente();
+});
+</script>
+</body>
+</html>
